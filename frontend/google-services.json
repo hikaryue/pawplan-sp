@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "717520968402",
+    "project_id": "pawplan-355c0",
+    "storage_bucket": "pawplan-355c0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:717520968402:android:bf75f605606de68cd42b0b",
+        "android_client_info": {
+          "package_name": "com.hikaryue.PawPlan"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDdxIKGp0TAwUlxNMnVqSp3dkgsqyRFXmQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
