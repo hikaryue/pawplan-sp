@@ -1,1 +1,1 @@
-# pawplan-sp
+Creation of my Special Problem titled "PawPlan:  A Mobile Application for Pet Health Management and CBC-Based Meal Generation for Adult Dogs and Cats" which incorporates mobile development, mixed-integer linear programming, and multithreading processes.
