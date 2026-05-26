@@ -9,4 +9,5 @@ Creation of my Special Problem titled "PawPlan:  A Mobile Application for Pet He
 ## Structure
 
 `frontend`: contains frontend-related code. Refer to README.md inside the folder for setup.
+
 `solver-backend`: contains the Python code for the solver.
