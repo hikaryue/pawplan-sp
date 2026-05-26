@@ -1,4 +1,4 @@
-// @ts-nocheck
+//@ts-nocheck
 import { auth, db } from '@/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -17,6 +17,7 @@ const EMPTY_FILTER = { include: [], exclude: [] };
 const SORT_MODES = ['none', 'asc', 'desc'];
 const SORT_ICONS = { none: '⇅', asc: '↑', desc: '↓' };
 const POLL_INTERVAL_MS = 15_000;
+const PAGE_SIZE = 50;
 
 const jobStorageKey = (petId: string) => `meal_plan_job_${petId}`;
 
@@ -53,7 +54,21 @@ const buildCustomFoodsFingerprint = (customFoods) =>
             .map(d => ({
                 id: d.id,
                 name: d.name,
-                nutrients: d.nutrients ?? {},
+                nutrients: Object.fromEntries(
+                    Object.entries(d.nutrients ?? {})
+                        .sort(([a], [b]) => a.localeCompare(b)) 
+                        .map(([nutrientKey, nutrientData]) => {
+                            if (nutrientData && typeof nutrientData === 'object' && 'value' in nutrientData) {
+                                return [
+                                    nutrientKey,
+                                    Object.fromEntries(
+                                        Object.entries(nutrientData).sort(([a], [b]) => a.localeCompare(b))
+                                    )
+                                ];
+                            }
+                            return [nutrientKey, nutrientData];
+                        })
+                ),
                 energy_kcal_per_kg: d.energy_kcal_per_kg ?? null,
                 size: d.size ?? null,
             }))
@@ -80,6 +95,7 @@ export default function MealScreen() {
     const [favorites, setFavorites] = useState(new Set());
     const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
     const [sortMode, setSortMode] = useState('none');
+    const [currentPage, setCurrentPage] = useState(1);
 
     const [filterVisible, setFilterVisible] = useState(false);
     const [activeTab, setActiveTab] = useState('include');
@@ -370,7 +386,10 @@ export default function MealScreen() {
             const sameType = saved.pet_type === pet.type;
             const sameClass = saved.pet_class === pet.petClass;
             const sameWeight = normaliseWeight(saved.weight) === normaliseWeight(pet.weight);
-            const sameCustomFoods = savedFingerprint === currentFingerprint;
+            const sameCustomFoods =
+            customFoods.length === 0
+                ? true
+                : savedFingerprint === currentFingerprint;
 
             if (sameType && sameClass && sameWeight && sameCustomFoods) {
                 setMealPlan(saved.meal_plan);
@@ -423,7 +442,7 @@ export default function MealScreen() {
             const fingerprint = buildCustomFoodsFingerprint(customFoods);
             await AsyncStorage.setItem(`meal_plan_fp_${petId}`, fingerprint);
 
-            const params = new URLSearchParams({ CLASS: pet.type, WEIGHT: String(normaliseWeight(pet.weight)) });
+            const params = new URLSearchParams({ CLASS: pet.type.toLowerCase(), WEIGHT: String(normaliseWeight(pet.weight)) });
             if (pet.petClass) params.set('ACTIVE', pet.petClass);
             if (customFoods.length > 0) {
                 const parsedCustom = buildCustomParam(customFoods);
@@ -467,12 +486,20 @@ export default function MealScreen() {
         return result;
     }, [mealPlan, filter, showFavoritesOnly, favorites, sortMode]);
 
+    useEffect(() => { setCurrentPage(1); }, [filteredCombinations]);
+
     const allFoods = useMemo(() => {
         if (!mealPlan) return [];
         const foodSet = new Set();
         mealPlan.combinations.forEach(combo => combo.foods.forEach(f => foodSet.add(f)));
         return Array.from(foodSet);
     }, [mealPlan]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredCombinations.length / PAGE_SIZE));
+    const paginatedCombinations = filteredCombinations.slice(
+        (currentPage - 1) * PAGE_SIZE,
+        currentPage * PAGE_SIZE
+    );
 
     const toggleFoodInFilter = (food, tab) => {
         setPendingFilter(prev => {
@@ -502,14 +529,14 @@ export default function MealScreen() {
                 }
             </View>
 
-            <View style={styles.customBtnRow}>
-                <TouchableOpacity style={styles.customBtn} onPress={() => router.push('/(tabs)/add_custom_food')}>
+            <View style={styles.customButtonRow}>
+                <TouchableOpacity style={styles.customButton} onPress={() => router.push('/(tabs)/add_custom_food')}>
                     <Ionicons name="add-circle-outline" size={16} color={TEAL} style={{ marginRight: 6 }} />
-                    <Text style={styles.customBtnText}>ADD {petLabel} FOOD</Text>
+                    <Text style={styles.customButtonText}>ADD {petLabel} FOOD</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.customBtn} onPress={() => router.push('/(tabs)/view_custom_food')}>
+                <TouchableOpacity style={styles.customButton} onPress={() => router.push('/(tabs)/view_custom_food')}>
                     <Ionicons name="list-outline" size={16} color={TEAL} style={{ marginRight: 6 }} />
-                    <Text style={styles.customBtnText}>VIEW {petLabel} FOODS</Text>
+                    <Text style={styles.customButtonText}>VIEW {petLabel} FOODS</Text>
                 </TouchableOpacity>
             </View>
 
@@ -540,22 +567,51 @@ export default function MealScreen() {
                     <View style={styles.metaButtons}>
                         <TouchableOpacity
                             onPress={cycleSortMode}
-                            style={[styles.sortBtn, sortMode !== 'none' && styles.sortBtnActive]}
+                            style={[styles.sortButton, sortMode !== 'none' && styles.sortButtonActive]}
                         >
-                            <Text style={[styles.sortBtnIcon, sortMode !== 'none' && styles.sortBtnTextActive]}>
+                            <Text style={[styles.sortButtonIcon, sortMode !== 'none' && styles.sortButtonTextActive]}>
                                 {SORT_ICONS[sortMode]}
                             </Text>
-                            <Text style={[styles.sortBtnLabel, sortMode !== 'none' && styles.sortBtnTextActive]}>g</Text>
+                            <Text style={[styles.sortButtonLabel, sortMode !== 'none' && styles.sortButtonTextActive]}>g</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             onPress={() => { setPendingFilter(filter); setFilterVisible(true); }}
-                            style={[styles.filterBtn, hasActiveFilter && styles.filterBtnActive]}
+                            style={[styles.filterButton, hasActiveFilter && styles.filterButtonActive]}
                         >
-                            <Text style={[styles.filterBtnText, hasActiveFilter && styles.filterBtnTextActive]}>
+                            <Text style={[styles.filterButtonText, hasActiveFilter && styles.filterButtonTextActive]}>
                                 Filter{hasActiveFilter ? ` (${filter.include.length + filter.exclude.length})` : ''}
                             </Text>
                         </TouchableOpacity>
                     </View>
+                </View>
+            )}
+
+            {mealPlan && totalPages > 1 && (
+                <View>
+                    <View style={styles.paginationRow}>
+                        <TouchableOpacity
+                            onPress={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            style={[styles.pageButton, currentPage === 1 && styles.pageButtonDisabled]}
+                        >
+                            <Text style={[styles.pageButtonText, currentPage === 1 && styles.pageButtonTextDisabled]}>‹ Prev</Text>
+                        </TouchableOpacity>
+
+                        <Text style={styles.pageInfo}>
+                            Page {currentPage} of {totalPages}
+                        </Text>
+
+                        <TouchableOpacity
+                            onPress={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            style={[styles.pageButton, currentPage === totalPages && styles.pageButtonDisabled]}
+                        >
+                            <Text style={[styles.pageButtonText, currentPage === totalPages && styles.pageButtonTextDisabled]}>Next ›</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <Text style={styles.displayingText}>
+                        Displaying {Math.min(currentPage * PAGE_SIZE, filteredCombinations.length)} of {filteredCombinations.length} entries
+                    </Text>
                 </View>
             )}
         </View>
@@ -572,12 +628,14 @@ export default function MealScreen() {
                 <View style={styles.cardAccent} />
                 <View style={styles.cardContent}>
                     <View style={styles.cardTopRow}>
-                        <Text style={styles.cardTitle}>Option {index + 1}</Text>
+                        <Text style={styles.cardTitle}>Option {(currentPage - 1) * PAGE_SIZE + index + 1}</Text>
                         <TouchableOpacity onPress={() => toggleFavorite(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                             <Text style={[styles.heartIcon, isFav && styles.heartIconActive]}>{isFav ? '♥' : '♡'}</Text>
                         </TouchableOpacity>
                     </View>
-                    <Text style={styles.cardFoods}>{item.foods.map(formatFoodName).join(', ')}</Text>
+                    <Text style={styles.cardFoods}>
+                        {item.foods.map(formatFoodName).join(', ')}
+                    </Text>
                     <View style={styles.cardMetaRow}>
                         <Text style={styles.cardMeta}>{item.delivered_me.toFixed(1)} kcal delivered</Text>
                         {item.total_grams != null && (
@@ -594,8 +652,8 @@ export default function MealScreen() {
     return (
         <>
             <FlatList
-                data={filteredCombinations}
-                keyExtractor={(_, index) => String(index)}
+                data={paginatedCombinations}
+                keyExtractor={(_, index) => String((currentPage - 1) * PAGE_SIZE + index)}
                 renderItem={renderItem}
                 ListHeaderComponent={renderHeader}
                 contentContainerStyle={styles.container}
@@ -635,9 +693,9 @@ const styles = StyleSheet.create({
     button: { width: '100%', paddingVertical: 13, borderRadius: 25, alignItems: 'center', marginBottom: 4, marginTop: 8, backgroundColor: TEAL },
     buttonInner: { flexDirection: 'row', alignItems: 'center' },
     buttonText: { fontSize: 16, fontWeight: 'bold', color: '#ffffff' },
-    customBtnRow: { flexDirection: 'row', gap: 8, width: '100%', marginTop: 8 },
-    customBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: TEAL, borderRadius: 25, paddingVertical: 10 },
-    customBtnText: { color: TEAL, fontWeight: '700', fontSize: 12, letterSpacing: 0.3 },
+    customButtonRow: { flexDirection: 'row', gap: 8, width: '100%', marginTop: 8 },
+    customButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: TEAL, borderRadius: 25, paddingVertical: 10 },
+    customButtonText: { color: TEAL, fontWeight: '700', fontSize: 12, letterSpacing: 0.3 },
     favButton: { width: '100%', paddingVertical: 10, borderRadius: 25, borderWidth: 1.5, borderColor: TEAL, alignItems: 'center', marginTop: 8, backgroundColor: 'transparent' },
     favButtonActive: { backgroundColor: TEAL, borderColor: TEAL },
     favButtonText: { fontSize: 14, color: TEAL, fontWeight: '500' },
@@ -645,15 +703,15 @@ const styles = StyleSheet.create({
     metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginTop: 12 },
     totalText: { fontSize: 13, color: '#888888', flexShrink: 1 },
     metaButtons: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    sortBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, borderWidth: 1.5, borderColor: TEAL, gap: 2 },
-    sortBtnActive: { borderColor: TEAL, backgroundColor: TEAL },
-    sortBtnIcon: { fontSize: 13, color: TEAL, fontWeight: '600' },
-    sortBtnLabel: { fontSize: 13, color: TEAL },
-    sortBtnTextActive: { color: '#ffffff' },
-    filterBtn: { paddingVertical: 4, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1.5, borderColor: TEAL },
-    filterBtnActive: { borderColor: TEAL, backgroundColor: TEAL },
-    filterBtnText: { fontSize: 13, color: TEAL },
-    filterBtnTextActive: { color: '#ffffff' },
+    sortButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, borderWidth: 1.5, borderColor: TEAL, gap: 2 },
+    sortButtonActive: { borderColor: TEAL, backgroundColor: TEAL },
+    sortButtonIcon: { fontSize: 13, color: TEAL, fontWeight: '600' },
+    sortButtonLabel: { fontSize: 13, color: TEAL },
+    sortButtonTextActive: { color: '#ffffff' },
+    filterButton: { paddingVertical: 4, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1.5, borderColor: TEAL },
+    filterButtonActive: { borderColor: TEAL, backgroundColor: TEAL },
+    filterButtonText: { fontSize: 13, color: TEAL },
+    filterButtonTextActive: { color: '#ffffff' },
     emptyText: { textAlign: 'center', color: '#888888', marginTop: 20, fontSize: 14, paddingHorizontal: 16 },
     card: { flexDirection: 'row', backgroundColor: '#f9fefe', borderRadius: 12, marginBottom: 10, borderWidth: 1.5, borderColor: TEAL_LIGHT, overflow: 'hidden' },
     cardFavorited: { borderColor: TEAL, backgroundColor: '#e8fafa' },
@@ -667,4 +725,11 @@ const styles = StyleSheet.create({
     cardMetaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     cardMeta: { fontSize: 12, color: '#888888' },
     cardGrams: { fontSize: 12, color: '#888888', fontWeight: '500' },
+    paginationRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginTop: 10, marginBottom: 2 },
+    displayingText: { fontSize: 12, color: '#888888', textAlign: 'center', width: '100%', marginTop: 4 },
+    pageButton: { paddingVertical: 6, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1.5, borderColor: TEAL },
+    pageButtonDisabled: { borderColor: '#CCCCCC' },
+    pageButtonText: { fontSize: 13, color: TEAL, fontWeight: '600' },
+    pageButtonTextDisabled: { color: '#CCCCCC' },
+    pageInfo: { fontSize: 13, color: '#555555', fontWeight: '500' },
 });

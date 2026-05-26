@@ -18,6 +18,7 @@ type Combination = {
     delivered_me: number;
     solution: Record<string, number>;
     custom_food_details: object;
+    total_grams?: number;
 };
 
 export default function MealPlanDetails() {
@@ -26,6 +27,8 @@ export default function MealPlanDetails() {
 
     const data: Combination = JSON.parse(combination as string);
     const portions = Object.entries(data.solution);
+
+    const totalGrams = data.total_grams ?? 0;
 
     useFocusEffect(
         useCallback(() => {
@@ -40,7 +43,6 @@ export default function MealPlanDetails() {
     return (
         <ScrollView contentContainerStyle={styles.container}>
 
-            {/*Energy Card*/}
             <View style={styles.energyCard}>
                 <View style={styles.energyHalf}>
                     <Text style={styles.energyNumber}>{data.me_required.toFixed(1)}</Text>
@@ -55,13 +57,16 @@ export default function MealPlanDetails() {
                 </View>
             </View>
 
-            {/*Portions*/}
+            <Text style={styles.totalGrams}>
+                TOTAL GRAMS: {Number(totalGrams).toFixed(1)} g
+            </Text>
+
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Portions</Text>
                 {portions.map(([food, amount]) => (
                     <View key={food} style={styles.row}>
                         <Text style={styles.foodName}>{food.replace(/_/g, ' ')}</Text>
-                        <Text style={styles.foodAmount}>{amount} g</Text>
+                        <Text style={styles.foodAmount}>{(Number(amount) * 100).toFixed(1)} g</Text>
                     </View>
                 ))}
             </View>
@@ -79,7 +84,7 @@ const styles = StyleSheet.create({
     energyCard: {
         flexDirection: 'row',
         borderRadius: 16,
-        marginBottom: 24,
+        marginBottom: 10,
         paddingVertical: 24,
         paddingHorizontal: 16,
         alignItems: 'center',
@@ -110,6 +115,13 @@ const styles = StyleSheet.create({
         height: 70,
         backgroundColor: TEAL,
         opacity: 0.4,
+    },
+    totalGrams: {
+        textAlign: 'center',
+        fontSize: 18,
+        fontWeight: '700',
+        color: TEAL,
+        marginBottom: 16,
     },
     section: {
         marginBottom: 24,
